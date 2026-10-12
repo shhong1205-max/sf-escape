@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>PROJECT ECLIPSE - AI Core Escape</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    @keyframes scanline {
+      0% { transform: translateY(-100%); }
+      100% { transform: translateY(1000%); }
+    }
+    .scanlines::before {
+      content: " ";
+      position: absolute;
+      top: 0; left: 0; bottom: 0; right: 0;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+      background-size: 100% 3px, 6px 100%;
+      pointer-events: none;
+      z-index: 40;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 5px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #0ea5e9;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-cyan-400 font-mono select-none antialiased min-h-screen p-4 flex flex-col items-center justify-start relative scanlines overflow-x-hidden">
+
+  <!-- Header & Alert Bar -->
+  <header class="w-full max-w-5xl mb-4 border border-cyan-500/40 bg-slate-900/80 backdrop-blur rounded-lg p-3.5 flex flex-wrap items-center justify-between shadow-[0_0_15px_rgba(6,182,212,0.15)]">
+    <div class="flex items-center space-x-3">
+      <div class="w-3.5 h-3.5 rounded-full bg-red-500 animate-ping"></div>
+      <div>
+        <h1 class="text-lg font-bold tracking-widest text-white flex items-center gap-2">
+          <span>PROJECT ECLIPSE</span>
+          <span class="text-xs px-2 py-0.5 rounded bg-red-950 text-red-400 border border-red-500/50">DEFCON 1</span>
+        </h1>
+        <p class="text-xs text-slate-400">오리온-9호 중앙 제어실 • AI "IRIS" 오작동 격리 프로토콜 발령</p>
+      </div>
+    </div>
+    <div class="flex items-center space-x-6 text-sm">
+      <div class="text-right">
+        <div class="text-xs text-slate-400">잔여 산소 및 생명유지 한계</div>
+        <div id="timer-display" class="text-xl font-black text-rose-500 tracking-wider">15:00</div>
+      </div>
+      <button onclick="resetGame()" class="px-3 py-1.5 text-xs border border-cyan-500/50 hover:bg-cyan-950/60 text-cyan-300 rounded transition">
+        재부팅 ↺
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Game Container -->
+  <main class="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1">
+    
+    <!-- Left: Station Map & Navigation & Inventory -->
+    <div class="space-y-4">
+      <!-- Section Selector -->
+      <div class="border border-cyan-500/30 bg-slate-900/70 p-4 rounded-lg">
+        <h2 class="text-sm font-bold tracking-wider text-cyan-300 mb-3 flex items-center justify-between">
+          <span>[구역 탐색]</span>
+          <span id="cur-room-label" class="text-xs text-amber-400 font-normal">통제 콘솔</span>
+        </h2>
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <button id="nav-btn-console" onclick="switchRoom('console')" class="p-2.5 rounded border border-cyan-500 bg-cyan-950/40 text-left hover:border-cyan-400 transition flex items-center gap-2">
+            <span class="text-cyan-400">🖥️</span> 통제 콘솔
+          </button>
+          <button id="nav-btn-power" onclick="switchRoom('power')" class="p-2.5 rounded border border-slate-700 bg-slate-900 text-left hover:border-cyan-500 transition flex items-center gap-2 text-slate-300">
+            <span class="text-yellow-400">⚡</span> 배전반 그리드
+          </button>
+          <button id="nav-btn-core" onclick="switchRoom('core')" class="p-2.5 rounded border border-slate-700 bg-slate-900 text-left hover:border-cyan-500 transition flex items-center gap-2 text-slate-300">
+            <span class="text-red-400">🧠</span> AI 메인 코어
+          </button>
+          <button id="nav-btn-pod" onclick="switchRoom('pod')" class="p-2.5 rounded border border-slate-700 bg-slate-900 text-left hover:border-cyan-500 transition flex items-center gap-2 text-slate-300">
+            <span class="text-emerald-400">🚀</span> 탈출 포드 도크
+          </button>
+        </div>
+      </div>
+
+      <!-- Inventory -->
+      <div class="border border-cyan-500/30 bg-slate-900/70 p-4 rounded-lg flex-1">
+        <h2 class="text-sm font-bold tracking-wider text-cyan-300 mb-2 flex justify-between items-center">
+          <span>[소지품 / 데이터 칩]</span>
+          <span id="inv-count" class="text-xs text-slate-400">0 / 3</span>
+        </h2>
+        <div id="inventory-list" class="space-y-2 min-h-[140px]">
+          <div class="text-xs text-slate-500 italic py-6 text-center">획득한 아이템이 없습니다. 주변을 조사하세요.</div>
+        </div>
+      </div>
+
+      <!-- System Log Stream -->
+      <div class="border border-cyan-500/30 bg-slate-900/70 p-4 rounded-lg">
+        <h2 class="text-xs font-bold tracking-wider text-slate-400 mb-2">[시스템 오디트 로그]</h2>
+        <div id="system-log" class="text-[12px] text-slate-300 font-mono h-32 overflow-y-auto space-y-1 custom-scrollbar pr-1">
+          <div class="text-cyan-400">[00:00:00] 보안 봉쇄 활성화. 모든 문이 잠겼습니다.</div>
+          <div class="text-rose-400">[00:00:01] IRIS: "침입자 생체 신호 감지. 탈출 불가."</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Center & Right: Room Interaction Stage -->
+    <div class="lg:col-span-2 border border-cyan-500/40 bg-slate-900/90 rounded-lg p-5 flex flex-col justify-between relative shadow-[inset_0_0_30px_rgba(0,0,0,0.8)]">
+      
+      <!-- Room 1: Control Console -->
+      <div id="room-console" class="space-y-4">
+        <div class="border-b border-cyan-500/20 pb-3 flex justify-between items-start">
+          <div>
+            <h3 class="text-base font-bold text-white flex items-center gap-2">
+              <span class="text-cyan-400">■</span> 수석 엔지니어 단말기
+            </h3>
+            <p class="text-xs text-slate-400 mt-1">책상 위에 메모 조각이 흩어져 있고, 메인 모니터가 잠겨 있습니다.</p>
+          </div>
+          <span id="badge-console" class="text-xs px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-500/50">미해결</span>
+        </div>
+
+        <!-- Interactive Clues Area -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <!-- Clue 1 -->
+          <div onclick="inspectClue('memo')" class="cursor-pointer border border-cyan-500/30 bg-slate-950/60 p-3 rounded hover:border-cyan-400 hover:bg-cyan-950/20 transition group">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-cyan-300 group-hover:text-white">📄 구겨진 엔지니어 메모</span>
+              <span class="text-[12px] text-cyan-500">조사 🔍</span>
+            </div>
+            <p class="text-xs text-slate-400 mt-1 line-clamp-1">"IRIS가 통제를 잃었다. 모든 게 격리됐다..."</p>
+          </div>
+
+          <!-- Clue 2 -->
+          <div onclick="inspectClue('badge')" class="cursor-pointer border border-cyan-500/30 bg-slate-950/60 p-3 rounded hover:border-cyan-400 hover:bg-cyan-950/20 transition group">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-cyan-300 group-hover:text-white">🪪 버려진 사원증</span>
+              <span class="text-[12px] text-cyan-500">조사 🔍</span>
+            </div>
+            <p class="text-xs text-slate-400 mt-1 line-clamp-1">수석 엔지니어 케인의 신분증.</p>
+          </div>
+        </div>
+
+        <!-- Terminal screen -->
+        <div class="border border-cyan-500/40 bg-black/90 p-4 rounded-md font-mono space-y-3">
+          <div class="flex justify-between text-xs text-cyan-400/80 border-b border-cyan-900 pb-1">
+            <span>ORION-OS v4.11 TERMINAL</span>
+            <span class="animate-pulse">● ONLINE</span>
+          </div>
+          <div id="console-terminal-text" class="text-xs text-slate-300 space-y-1">
+            <p class="text-red-400">> 보안 경고: 메인 전력 그리드 통제 차단됨.</p>
+            <p class="text-slate-400">> 관리자 권한을 인증하여 배전반 오버라이드 코드를 획득하십시오.</p>
+            <p class="text-cyan-300">> 힌트: 사원번호와 메모의 암호화 오프셋을 교차 연산하십시오.</p>
+          </div>
+
+          <div class="flex gap-2 pt-2">
+            <input id="console-input" type="text" placeholder="암호 4자리 입력..." maxlength="8" class="flex-1 bg-slate-900 border border-cyan-500/50 rounded px-3 py-1.5 text-xs text-cyan-200 focus:outline-none focus:border-cyan-300 uppercase">
+            <button onclick="submitConsolePassword()" class="px-4 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs rounded transition">인증</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Room 2: Power Grid (Puzzle: Pipe/Wire routing) -->
+      <div id="room-power" class="hidden space-y-4">
+        <div class="border-b border-cyan-500/20 pb-3 flex justify-between items-start">
+          <div>
+            <h3 class="text-base font-bold text-white flex items-center gap-2">
+              <span class="text-yellow-400">■</span> 보조 동력 배전반
+            </h3>
+            <p class="text-xs text-slate-400 mt-1">타일을 회전시켜 [좌측 전원 IN]에서 [우측 코어 OUT]까지 전력을 연결하세요.</p>
+          </div>
+          <span id="badge-power" class="text-xs px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-500/50">전력 차단됨</span>
+        </div>
+
+        <!-- Wire Grid 3x3 -->
+        <div class="flex flex-col items-center justify-center p-4 bg-slate-950/80 border border-cyan-500/30 rounded-lg">
+          <div class="flex items-center gap-3 mb-2 text-xs">
+            <span class="px-2 py-1 bg-emerald-950 text-emerald-400 border border-emerald-500/40 rounded font-bold">⚡ IN (전원)</span>
+            <span class="text-slate-500">➔</span>
+            <span class="text-slate-400">모든 노선 연결</span>
+            <span class="text-slate-500">➔</span>
+            <span class="px-2 py-1 bg-cyan-950 text-cyan-400 border border-cyan-500/40 rounded font-bold">OUT (AI 코어실) ⚡</span>
+          </div>
+
+          <div id="grid-container" class="grid grid-cols-3 gap-2 p-3 bg-slate-900 border border-slate-700 rounded-lg">
+            <!-- 9 Tiles generated by JS -->
+          </div>
+
+          <p class="text-xs text-slate-400 mt-3 text-center">타일을 클릭하여 90도씩 회전시킵니다.</p>
+        </div>
+      </div>
+
+      <!-- Room 3: AI Core Chamber -->
+      <div id="room-core" class="hidden space-y-4">
+        <div class="border-b border-cyan-500/20 pb-3 flex justify-between items-start">
+          <div>
+            <h3 class="text-base font-bold text-white flex items-center gap-2">
+              <span class="text-red-500">■</span> AI "IRIS" 중추 노드
+            </h3>
+            <p class="text-xs text-slate-400 mt-1">거대한 양자 연산 코어가 붉게 번쩍이며 방화벽을 방어하고 있습니다.</p>
+          </div>
+          <span id="badge-core" class="text-xs px-2 py-0.5 rounded bg-red-950 text-red-300 border border-red-500/50">방화벽 활성</span>
+        </div>
+
+        <div class="bg-black/90 border border-red-500/40 p-4 rounded-lg space-y-4">
+          <div class="flex items-center space-x-3">
+            <div class="w-8 h-8 rounded-full bg-red-600/40 border border-red-500 flex items-center justify-center animate-pulse">
+              <span class="text-xs font-black text-red-300">👁️</span>
+            </div>
+            <div>
+              <div class="text-xs font-bold text-red-400">IRIS_CORE_DEFENSE_v9</div>
+              <div class="text-xs text-slate-400">"인간의 접근을 거부한다. 양자 방화벽 패턴을 복제할 수 없을 것이다."</div>
+            </div>
+          </div>
+
+          <!-- Simon-like Memory Sequence Puzzle -->
+          <div class="p-4 bg-slate-950 rounded border border-slate-800 text-center space-y-3">
+            <div class="text-xs text-cyan-300 font-bold" id="sequence-instruction">
+              [신호 패턴 수신 시작] 버튼을 눌러 바이패스 주파수 신호를 확인하십시오.
+            </div>
+            
+            <div class="flex justify-center gap-3 py-2">
+              <button id="seq-btn-0" onclick="handleSeqClick(0)" class="w-16 h-16 rounded border-2 border-red-500 bg-red-950/40 text-red-400 font-bold text-sm hover:scale-105 transition">ALPHA</button>
+              <button id="seq-btn-1" onclick="handleSeqClick(1)" class="w-16 h-16 rounded border-2 border-cyan-500 bg-cyan-950/40 text-cyan-400 font-bold text-sm hover:scale-105 transition">BETA</button>
+              <button id="seq-btn-2" onclick="handleSeqClick(2)" class="w-16 h-16 rounded border-2 border-yellow-500 bg-yellow-950/40 text-yellow-400 font-bold text-sm hover:scale-105 transition">GAMMA</button>
+              <button id="seq-btn-3" onclick="handleSeqClick(3)" class="w-16 h-16 rounded border-2 border-purple-500 bg-purple-950/40 text-purple-400 font-bold text-sm hover:scale-105 transition">DELTA</button>
+            </div>
+
+            <div class="flex justify-between items-center px-4 text-xs text-slate-400">
+              <span id="seq-round-info">목표 단계: 0 / 4</span>
+              <button id="seq-start-btn" onclick="startSequencePuzzle()" class="px-3 py-1 bg-red-600 hover:bg-red-500 text-white font-bold rounded">
+                신호 패턴 수신 시작
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Room 4: Escape Pod Bay -->
+      <div id="room-pod" class="hidden space-y-4">
+        <div class="border-b border-cyan-500/20 pb-3 flex justify-between items-start">
+          <div>
+            <h3 class="text-base font-bold text-white flex items-center gap-2">
+              <span class="text-emerald-400">■</span> 3번 비상 탈출 포드 도크
+            </h3>
+            <p class="text-xs text-slate-400 mt-1">우주선 선체 외곽에 장착된 1인승 탈출 포드입니다. 도어가 완전 봉쇄 상태입니다.</p>
+          </div>
+          <span id="badge-pod" class="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">도어 잠김</span>
+        </div>
+
+        <div class="p-5 bg-slate-950 border border-cyan-500/30 rounded-lg space-y-4 text-center">
+          <div class="text-5xl my-2">🚀</div>
+          <h4 class="text-sm font-bold text-white">비상 사출 제어 콘솔</h4>
+          <p class="text-xs text-slate-400 max-w-md mx-auto">
+            도크를 개방하려면 [IRIS 오버라이드 칩]을 삽입하고 비상 사출 시동 스위치를 작동해야 합니다.
+          </p>
+
+          <div id="pod-action-area" class="pt-2">
+            <button id="btn-escape" onclick="tryEscape()" class="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-400 font-bold text-sm rounded border border-slate-600 transition cursor-not-allowed">
+              🔒 도어 해제 불가 (조건 미달성)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom Hint / Dialogue box -->
+      <div id="dialogue-box" class="mt-4 border-t border-cyan-500/30 pt-3 text-xs text-slate-300 flex items-start gap-2 bg-slate-950/40 p-2 rounded">
+        <span class="text-cyan-400 font-bold">INFO:</span>
+        <span id="dialogue-text">주변 단서를 조사하고 전력을 복구하여 AI 코어 통제권을 되찾으세요.</span>
+      </div>
+    </div>
+  </main>
+
+  <!-- Modal / Clue Viewer -->
+  <div id="clue-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-cyan-500 rounded-lg max-w-md w-full p-5 space-y-4 shadow-[0_0_30px_rgba(6,182,212,0.3)]">
+      <div class="flex justify-between items-center border-b border-cyan-500/30 pb-2">
+        <h4 id="modal-title" class="text-sm font-bold text-cyan-300">단서 정보</h4>
+        <button onclick="closeModal()" class="text-slate-400 hover:text-white text-sm">✕ 닫기</button>
+      </div>
+      <div id="modal-body" class="text-xs text-slate-300 leading-relaxed font-mono whitespace-pre-line">
+        <!-- Content -->
+      </div>
+      <div class="flex justify-end pt-2">
+        <button onclick="closeModal()" class="px-4 py-1 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs rounded">확인</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Victory Overlay -->
+  <div id="victory-modal" class="fixed inset-0 bg-black/95 z-50 hidden flex flex-col items-center justify-center p-6 text-center">
+    <div class="text-6xl mb-4 animate-bounce">🌌</div>
+    <h2 class="text-2xl font-black text-cyan-400 tracking-wider mb-2">탈출 성공 (MISSION ACCOMPLISHED)</h2>
+    <p class="text-sm text-slate-300 max-w-lg mb-6 leading-relaxed">
+      AI 'IRIS'의 오작동 코어를 성공적으로 바이패스하고 비상 탈출 포드를 사출했습니다.<br>
+      오리온-9호는 뒤편의 우주 저편으로 멀어져 가며, 지구 연합 구조선과의 조우 궤도에 진입합니다!
+    </p>
+    <div class="text-xs text-cyan-300 mb-6 border border-cyan-500/40 p-3 rounded bg-cyan-950/40">
+      남은 생명유지 시간: <span id="final-time" class="font-bold text-emerald-400"></span>
+    </div>
+    <button onclick="resetGame()" class="px-6 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-sm rounded shadow-lg transition">
+      처음부터 다시 도전하기
+    </button>
+  </div>
+
+  <script>
+    // Game State
+    const gameState = {
+      timeLeft: 15 * 60,
+      timerId: null,
+      inventory: [],
+      consoleSolved: false,
+      powerSolved: false,
+      coreSolved: false,
+      escapeReady: false,
+      currentRoom: 'console'
+    };
+
+    const powerGridConfig = [
+      { type: 'L', rot: 0, valid: [1] },    // (0,0) needs rot 1
+      { type: 'I', rot: 0, valid: [0, 2] }, // (0,1)
+      { type: 'L', rot: 2, valid: [0] },    // (0,2)
+      { type: 'I', rot: 1, valid: [0, 2] }, // (1,0) needs rot 0 or 2
+      { type: 'L', rot: 1, valid: [0] },    // (1,1)
+      { type: 'I', rot: 0, valid: [1] },    // (1,2)
+      { type: 'L', rot: 2, valid: [0] },    // (2,0) needs rot 0
+      { type: 'I', rot: 0, valid: [1, 3] }, // (2,1) needs rot 1 or 3
+      { type: 'L', rot: 1, valid: [3] }     // (2,2) needs rot 3
+    ];
+
+    let simonSequence = [];
+    let playerSequence = [];
+    let simonActive = false;
+    const TOTAL_SIMON_ROUNDS = 4;
+
+    function init() {
+      startTimer();
+      renderInventory();
+      renderPowerGrid();
+      updateBadges();
+      logSystem("생체 신호 동기화 완료. 생명 유지 장치 카운트다운 시작.");
+    }
+
+    function startTimer() {
+      clearInterval(gameState.timerId);
+      gameState.timerId = setInterval(() => {
+        gameState.timeLeft--;
+        const min = Math.floor(gameState.timeLeft / 60).toString().padStart(2, '0');
+        const sec = (gameState.timeLeft % 60).toString().padStart(2, '0');
+        document.getElementById('timer-display').innerText = `${min}:${sec}`;
+
+        if (gameState.timeLeft <= 0) {
+          clearInterval(gameState.timerId);
+          alert("산소가 고갈되었습니다... 시스템 셧다운.");
+          resetGame();
+        }
+      }, 1000);
+    }
+
+    function switchRoom(room) {
+      ['console', 'power', 'core', 'pod'].forEach(r => {
+        document.getElementById(`room-${r}`).classList.add('hidden');
+        document.getElementById(`nav-btn-${r}`).className = "p-2.5 rounded border border-slate-700 bg-slate-900 text-left hover:border-cyan-500 transition flex items-center gap-2 text-slate-300";
+      });
+
+      document.getElementById(`room-${room}`).classList.remove('hidden');
+      document.getElementById(`nav-btn-${room}`).className = "p-2.5 rounded border border-cyan-500 bg-cyan-950/40 text-left hover:border-cyan-400 transition flex items-center gap-2 text-cyan-300";
+
+      const labels = {
+        console: '통제 콘솔',
+        power: '배전반 그리드',
+        core: 'AI 메인 코어',
+        pod: '탈출 포드 도크'
+      };
+      document.getElementById('cur-room-label').innerText = labels[room];
+      gameState.currentRoom = room;
+
+      if (room === 'power' && !gameState.consoleSolved) {
+        setDialogue("⚠️ 주의: 배전반 접근 인증 암호가 필요합니다. 콘솔에서 단서를 먼저 찾으세요.");
+      } else if (room === 'core' && !gameState.powerSolved) {
+        setDialogue("⚠️ AI 코어 전력이 차단되어 있습니다. 배전반을 먼저 수리해야 합니다.");
+      } else if (room === 'pod' && !gameState.coreSolved) {
+        setDialogue("⚠️ 탈출 포드는 AI 방화벽이 해제되고 오버라이드 칩을 삽입해야 열립니다.");
+      }
+    }
+
+    function setDialogue(text) {
+      document.getElementById('dialogue-text').innerText = text;
+    }
+
+    function logSystem(msg) {
+      const log = document.getElementById('system-log');
+      const time = new Date().toTimeString().split(' ')[0];
+      const entry = document.createElement('div');
+      entry.className = "text-cyan-400/90";
+      entry.innerText = `[${time}] ${msg}`;
+      log.appendChild(entry);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function inspectClue(type) {
+      const modal = document.getElementById('clue-modal');
+      const title = document.getElementById('modal-title');
+      const body = document.getElementById('modal-body');
+
+      if (type === 'memo') {
+        title.innerText = "📄 구겨진 엔지니어 메모";
+        body.innerText = 
+`[작전 일지 - 케인 수석]
+"IRIS가 통제를 잃었다. 모든 게 격리됐다.
+내 사원번호 [ID: 7429]의 각 자릿수에
+비상 시프트 오프셋 [+1, -1, +2, -2]를 적용한 값이
+콘솔 마스터 바이패스 코드다.
+
+제발 누군가 이걸 보고 전력을 복구하길..."`;
+      } else if (type === 'badge') {
+        title.innerText = "🪪 수석 엔지니어 케인의 ID 카드";
+        body.innerText = 
+`[ORION-9 연합 승무원 카드]
+이름: 케인 바렛 (Kane Barrett)
+직책: 수석 전력 엔지니어
+사원 번호: 7429
+부서: 양자 동력 제어국
+보안 인가 등급: 레벨 3`;
+      }
+      modal.classList.remove('hidden');
+    }
+
+    function closeModal() {
+      document.getElementById('clue-modal').classList.add('hidden');
+    }
+
+    // Puzzle 1: Console Password: 7+1=8, 4-1=3, 2+2=4, 9-2=7 -> 8347
+    function submitConsolePassword() {
+      const input = document.getElementById('console-input').value.trim();
+      if (input === '8347') {
+        if (!gameState.consoleSolved) {
+          gameState.consoleSolved = true;
+          addItem({ id: 'chip_auth', name: '🔑 배전반 잠금해제 키', desc: '배전반 콘솔 오버라이드 키' });
+          logSystem("관리자 인증 성공! [배전반 오버라이드 권한] 승인.");
+          setDialogue("성공! 배전반 잠금이 해제되었습니다. 이제 [배전반 그리드] 구역으로 이동하세요.");
+          document.getElementById('console-terminal-text').innerHTML += `<p class="text-emerald-400 font-bold">> 승인 완료: 보조 배전반 파워라인 접근 허가됨.</p>`;
+          updateBadges();
+        } else {
+          setDialogue("이미 인증이 완료되었습니다.");
+        }
+      } else {
+        logSystem(`인증 실패: 잘못된 코드 [${input}]`);
+        setDialogue("❌ 잘못된 인증 코드입니다. 메모와 사원증을 다시 계산해보세요.");
+      }
+    }
+
+    function renderPowerGrid() {
+      const container = document.getElementById('grid-container');
+      container.innerHTML = '';
+
+      powerGridConfig.forEach((tile, idx) => {
+        const div = document.createElement('div');
+        div.className = "w-16 h-16 bg-slate-950 border border-cyan-500/40 rounded flex items-center justify-center cursor-pointer hover:border-yellow-400 transition relative";
+        div.onclick = () => rotateTile(idx);
+
+        const svg = document.createElement('div');
+        svg.className = "transition-transform duration-200";
+        svg.style.transform = `rotate(${tile.rot * 90}deg)`;
+
+        if (tile.type === 'L') {
+          svg.innerHTML = `
+            <svg width="40" height="40" viewBox="0 0 40 40" class="${gameState.powerSolved ? 'stroke-yellow-400' : 'stroke-cyan-500'} stroke-[5] fill-none">
+              <path d="M 20 0 L 20 20 L 40 20" />
+            </svg>`;
+        } else {
+          svg.innerHTML = `
+            <svg width="40" height="40" viewBox="0 0 40 40" class="${gameState.powerSolved ? 'stroke-yellow-400' : 'stroke-cyan-500'} stroke-[5] fill-none">
+              <path d="M 20 0 L 20 40" />
+            </svg>`;
+        }
+
+        div.appendChild(svg);
+        container.appendChild(div);
+      });
+    }
+
+    function rotateTile(idx) {
+      if (!gameState.consoleSolved) {
+        setDialogue("⚠️ 배전반 제어판이 잠겨 있습니다. [통제 콘솔]에서 인증을 먼저 완료하세요.");
+        return;
+      }
+      if (gameState.powerSolved) {
+        setDialogue("이미 전력이 공급되었습니다. 메인 코어로 이동하세요.");
+        return;
+      }
+
+      powerGridConfig[idx].rot = (powerGridConfig[idx].rot + 1) % 4;
+      renderPowerGrid();
+      checkPowerGrid();
+    }
+
+    function checkPowerGrid() {
+      const t0 = powerGridConfig[0].rot === 1;
+      const t3 = (powerGridConfig[3].rot === 0 || powerGridConfig[3].rot === 2);
+      const t6 = powerGridConfig[6].rot === 0;
+      const t7 = (powerGridConfig[7].rot === 1 || powerGridConfig[7].rot === 3);
+      const t8 = powerGridConfig[8].rot === 3;
+
+      if (t0 && t3 && t6 && t7 && t8) {
+        gameState.powerSolved = true;
+        addItem({ id: 'core_module', name: '🔋 양자 전력 셀', desc: 'AI 코어를 기동시킬 고출력 셀' });
+        logSystem("동력 그리드 정렬 성공! AI 메인 코어로 전력이 전달됩니다.");
+        setDialogue("⚡ 전력 연결 완료! [AI 메인 코어]로 전력이 재공급되었습니다!");
+        updateBadges();
+        renderPowerGrid();
+      }
+    }
+
+    function startSequencePuzzle() {
+      if (!gameState.powerSolved) {
+        setDialogue("⚠️ 코어 전력이 꺼져 있습니다. 배전반을 먼저 해결하세요.");
+        return;
+      }
+      if (gameState.coreSolved) {
+        setDialogue("이미 AI 코어 해킹이 완료되었습니다.");
+        return;
+      }
+
+      simonSequence = [];
+      playerSequence = [];
+      for (let i = 0; i < TOTAL_SIMON_ROUNDS; i++) {
+        simonSequence.push(Math.floor(Math.random() * 4));
+      }
+      
+      playSimonRound(1);
+    }
+
+    let currentStepLimit = 1;
+
+    function playSimonRound(step) {
+      currentStepLimit = step;
+      playerSequence = [];
+      simonActive = false;
+      document.getElementById('seq-round-info').innerText = `목표 단계: ${step} / ${TOTAL_SIMON_ROUNDS}`;
+      document.getElementById('sequence-instruction').innerText = `패턴 재생 중... 잘 기억하세요!`;
+
+      let i = 0;
+      const interval = setInterval(() => {
+        flashBtn(simonSequence[i]);
+        i++;
+        if (i >= step) {
+          clearInterval(interval);
+          setTimeout(() => {
+            simonActive = true;
+            document.getElementById('sequence-instruction').innerText = `지금 동일한 순서로 버튼을 누르세요! (${playerSequence.length}/${step})`;
+          }, 400);
+        }
+      }, 700);
+    }
+
+    function flashBtn(idx) {
+      const btn = document.getElementById(`seq-btn-${idx}`);
+      btn.classList.add('brightness-200', 'scale-110');
+      setTimeout(() => {
+        btn.classList.remove('brightness-200', 'scale-110');
+      }, 350);
+    }
+
+    function handleSeqClick(idx) {
+      if (!simonActive || gameState.coreSolved) return;
+
+      flashBtn(idx);
+      playerSequence.push(idx);
+
+      const curIdx = playerSequence.length - 1;
+      if (playerSequence[curIdx] !== simonSequence[curIdx]) {
+        simonActive = false;
+        logSystem("방화벽 주파수 매칭 실패! 시퀀스가 리셋됩니다.");
+        document.getElementById('sequence-instruction').innerText = "❌ 오류: 일치하지 않습니다. 다시 수신을 시작하세요.";
+        return;
+      }
+
+      document.getElementById('sequence-instruction').innerText = `지금 동일한 순서로 버튼을 누르세요! (${playerSequence.length}/${currentStepLimit})`;
+
+      if (playerSequence.length === currentStepLimit) {
+        simonActive = false;
+        if (currentStepLimit === TOTAL_SIMON_ROUNDS) {
+          gameState.coreSolved = true;
+          addItem({ id: 'override_chip', name: '💾 IRIS 오버라이드 칩', desc: '비상 탈출 포드를 강제 개방할 수 있는 칩' });
+          logSystem("AI IRIS 방화벽 해킹 성공! 비상 탈출 프로토콜 권한 획득.");
+          setDialogue("🎉 해킹 성공! [IRIS 오버라이드 칩]을 획득했습니다. 즉시 [탈출 포드 도크]로 가세요!");
+          document.getElementById('sequence-instruction').innerText = "✅ 방화벽 바이패스 성공! AI 코어 무력화됨.";
+          updateBadges();
+        } else {
+          setTimeout(() => {
+            playSimonRound(currentStepLimit + 1);
+          }, 800);
+        }
+      }
+    }
+
+    function tryEscape() {
+      if (!gameState.coreSolved) {
+        setDialogue("⚠️ 탈출 포드 잠금을 풀 수 없습니다. 먼저 AI 코어를 해킹해야 합니다.");
+        return;
+      }
+
+      clearInterval(gameState.timerId);
+      const min = Math.floor(gameState.timeLeft / 60).toString().padStart(2, '0');
+      const sec = (gameState.timeLeft % 60).toString().padStart(2, '0');
+      document.getElementById('final-time').innerText = `${min}분 ${sec}초`;
+      document.getElementById('victory-modal').classList.remove('hidden');
+    }
+
+    function addItem(item) {
+      if (!gameState.inventory.find(i => i.id === item.id)) {
+        gameState.inventory.push(item);
+        renderInventory();
+      }
+    }
+
+    function renderInventory() {
+      const list = document.getElementById('inventory-list');
+      document.getElementById('inv-count').innerText = `${gameState.inventory.length} / 3`;
+
+      if (gameState.inventory.length === 0) {
+        list.innerHTML = `<div class="text-xs text-slate-500 italic py-6 text-center">획득한 아이템이 없습니다. 주변을 조사하세요.</div>`;
+        return;
+      }
+
+      list.innerHTML = '';
+      gameState.inventory.forEach(item => {
+        const div = document.createElement('div');
+        div.className = "p-2 bg-slate-950/70 border border-cyan-500/30 rounded text-xs flex flex-col gap-0.5";
+        div.innerHTML = `
+          <span class="font-bold text-cyan-300">${item.name}</span>
+          <span class="text-[12px] text-slate-400">${item.desc}</span>
+        `;
+        list.appendChild(div);
+      });
+    }
+
+    function updateBadges() {
+      const bConsole = document.getElementById('badge-console');
+      if (gameState.consoleSolved) {
+        bConsole.className = "text-xs px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/50";
+        bConsole.innerText = "해결됨";
+      }
+
+      const bPower = document.getElementById('badge-power');
+      if (gameState.powerSolved) {
+        bPower.className = "text-xs px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/50";
+        bPower.innerText = "전력 정상";
+      }
+
+      const bCore = document.getElementById('badge-core');
+      if (gameState.coreSolved) {
+        bCore.className = "text-xs px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/50";
+        bCore.innerText = "바이패스됨";
+
+        const btnEscape = document.getElementById('btn-escape');
+        btnEscape.className = "px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold text-sm rounded shadow-[0_0_15px_rgba(16,185,129,0.5)] transition cursor-pointer animate-pulse";
+        btnEscape.innerText = "🚀 비상 탈출 포드 즉시 사출!";
+        document.getElementById('badge-pod').className = "text-xs px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/50";
+        document.getElementById('badge-pod').innerText = "사출 준비완료";
+      }
+    }
+
+    function resetGame() {
+      clearInterval(gameState.timerId);
+      gameState.timeLeft = 15 * 60;
+      gameState.inventory = [];
+      gameState.consoleSolved = false;
+      gameState.powerSolved = false;
+      gameState.coreSolved = false;
+      gameState.escapeReady = false;
+
+      powerGridConfig[0].rot = 0;
+      powerGridConfig[3].rot = 1;
+      powerGridConfig[6].rot = 2;
+      powerGridConfig[7].rot = 0;
+      powerGridConfig[8].rot = 1;
+
+      document.getElementById('victory-modal').classList.add('hidden');
+      document.getElementById('badge-console').className = "text-xs px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-500/50";
+      document.getElementById('badge-console').innerText = "미해결";
+      document.getElementById('badge-power').className = "text-xs px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-500/50";
+      document.getElementById('badge-power').innerText = "전력 차단됨";
+      document.getElementById('badge-core').className = "text-xs px-2 py-0.5 rounded bg-red-950 text-red-300 border border-red-500/50";
+      document.getElementById('badge-core').innerText = "방화벽 활성";
+      document.getElementById('badge-pod').className = "text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700";
+      document.getElementById('badge-pod').innerText = "도어 잠김";
+
+      const btnEscape = document.getElementById('btn-escape');
+      btnEscape.className = "px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-400 font-bold text-sm rounded border border-slate-600 transition cursor-not-allowed";
+      btnEscape.innerText = "🔒 도어 해제 불가 (조건 미달성)";
+
+      document.getElementById('system-log').innerHTML = '';
+      init();
+      switchRoom('console');
+    }
+
+    window.onload = init;
+  </script>
+</body>
+</html>
